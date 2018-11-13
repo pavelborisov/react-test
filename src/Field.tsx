@@ -9,6 +9,8 @@ import * as Konva from 'konva';
 import * as React from 'react';
 import {Layer, Rect, Stage, Text} from 'react-konva';
 import { Game } from './Game';
+import {inject, observer} from "mobx-react";
+import GameLogicStore from "./GameLogicStore";
 
 interface IProps {
     h: number;
@@ -39,26 +41,27 @@ class Field extends React.Component<IProps, {}> {
 
     private renderField(w: number, h: number): JSX.Element[] {
 
+        const gameField = this.props.gameLogicStore.field;
         const field = [];
 
         for( let x = 0; x < w; x++ ) {
-        for( let y = 0; y < h; y++ ) {
-            field.push(
-            <Rect
-                key={x * y}
-                x={x * Game.field.displayWidth}
-                y={y * Game.field.displayHeight}
-                width={Game.field.displayWidth}
-                height={Game.field.displayHeight}
-                fill={Konva.Util.getRandomColor()}
-                shadowBlur={5}
-            />
-            );
-        }
+            for( let y = 0; y < h; y++ ) {
+                field.push(
+                    <Rect
+                        key={x * y}
+                        x={x * Game.field.displayWidth}
+                        y={y * Game.field.displayHeight}
+                        width={Game.field.displayWidth}
+                        height={Game.field.displayHeight}
+                        fill={ !!gameField[x][y] ? Konva.Util.getRandomColor() : 0 }
+                        shadowBlur={5}
+                    />
+                );
+            }
         }
 
         return field;
     }
 }
 
-export default Field;
+export default inject<{gameLogicStore: GameLogicStore;}, IProps, any, any>("gameLogicStore") (observer(Field));
