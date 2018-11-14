@@ -61,8 +61,31 @@ class RectDrawer implements IRect {
         );
     }
 
+    public orto(t: number[]): IVector {
+        return {
+            x1: t[0], 
+            y1: t[1],
+            x2: t[0] - t[2], 
+            y2: t[1] - t[3]
+        }
+    }
+
+    public check(t: IVector, v: number[][]): IVector[] {
+        return v.map((vi: number[]) => this.orto(vi))
+         .filter((o: IVector) => (( o.x2 - o.x1 ) * (t.x2 - t.x1) + 
+            ( o.y2 - o.y1 ) * (t.y2 - t.y1)) > 0
+         );
+    }
+
     public normals(target: IVector): IVector[] {
-        return [];
+        const {x,y,w,h} = this;
+
+        return this.check(target, 
+            [[x,y,x+w,y],
+            [x+w,y,x+w,y+h],
+            [x+w,y+h,x,y+h],
+            [x,y+h,x,y]]
+        );
     }
 }
 
@@ -180,6 +203,7 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
     }
 
     private timerId?:number = undefined;
+    private tick: number = 0;
 
     constructor(props: IProps) {
         super(props);
@@ -202,23 +226,22 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
 
         const grid = [];
         const gridStepX = Game.field.displayWidth;
-        for(let i = 0; i < Game.field.width; i++) {
+        for(let i = 0; i <= Game.field.width; i++) {
             grid.push(<Line key={i + "x"} points={[i * gridStepX,0, i * gridStepX, Game.field.height * Game.field.displayHeight]} stroke={'gray'} strokeWidth={1}/>)
         }
 
         const gridStepY = Game.field.displayHeight;
-        for(let i = 0; i < Game.field.height; i++) {
+        for(let i = 0; i <= Game.field.height; i++) {
             grid.push(<Line key={i + "y"} points={[0, i * gridStepY, Game.field.width * Game.field.displayWidth, i * gridStepY]} stroke={'gray'} strokeWidth={1}/>)
         }                        
         
         return (
         <div className="App">
-            <Stage width={window.innerWidth} height={window.innerHeight}>
+            <Stage x={20} width={window.innerWidth} height={window.innerHeight}>
             <Layer>
-                <Text x={35} y={25} text="Try" fill={Konva.Util.getRandomColor()}/>
-                <Text x={5} y={335} text="Try" fill={Konva.Util.getRandomColor()} />
-                <Text x={135} y={25} text="Try" fill={Konva.Util.getRandomColor()} />
-                <Text text="Try click on rect" />
+                <Text key={Konva.Util.getRandomColor()} text={ this.tick.toString() }/>
+            </Layer>
+            <Layer y={20}>
                 { grid }
                 { this.state.hero.render() }
                 { field }                
@@ -273,6 +296,7 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
             this.setState({hero});
         }
 
+        this.tick++;
         this.timerId = window.setTimeout(this.onTick.bind(this), 100);
     }
 
@@ -303,11 +327,13 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
     private calculatePotential() {
         // const gameField: IFigure[] = this.state.field;
         
-        // for( let x = 0; x < Game.field.width * Game.field.displayWidth; x += Game.field.displayWidth) {
-        //     for( let y = 0; y < Game.field.height * Game.field.displayHeight; y += Game.field.displayHeight) {
-        //         gameField
-        //     }
-        // }
+        for( let x = 0; x < Game.field.width * Game.field.displayWidth; x += Game.field.displayWidth) {
+            for( let y = 0; y < Game.field.height * Game.field.displayHeight; y += Game.field.displayHeight) {
+
+                // const target = {x,y}
+                // gameField.reduce((a,b) => a.normals)
+            }
+        }
     }
 
     // private renderField(w: number, h: number): JSX.Element[] {
