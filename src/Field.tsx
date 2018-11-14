@@ -164,7 +164,7 @@ class HeroDrawer implements IPoint {
     }
 }
 
-class Field extends React.Component<IProps, {board: number[][], field: IFigure[], hero: IFigure, potential: IFigure[]}> {    
+class Field extends React.Component<IProps, {board: number[][], field: IFigure[], hero: IFigure, potential: IVector[]}> {    
     public state = {
         board: [
             [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -235,8 +235,16 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
             grid.push(<Line key={i + "y"} points={[0, i * gridStepY, Game.field.width * Game.field.displayWidth, i * gridStepY]} stroke={'gray'} strokeWidth={1}/>)
         }                        
         
+        const potentials = this.state.potential.map((v:IVector) =>
+            <Line
+                key={Math.random()}
+                points={[v.x1, v.y1, v.x2, v.y2]}
+                stroke={'green'}
+            />
+        )
+
         return (
-        <div className="App">
+        <div className="App" onClick={this.calculatePotential}>
             <Stage x={20} width={window.innerWidth} height={window.innerHeight}>
             <Layer>
                 <Text key={Konva.Util.getRandomColor()} text={ this.tick.toString() }/>
@@ -244,7 +252,8 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
             <Layer y={20}>
                 { grid }
                 { this.state.hero.render() }
-                { field }                
+                { field }
+                { potentials }
             </Layer>
             </Stage>
         </div>    
@@ -325,14 +334,36 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
     }
 
     private calculatePotential() {
-        // const gameField: IFigure[] = this.state.field;
-        
+        const gameField: IFigure[] = this.state.field;
+        const hero: HeroDrawer = this.state.hero;
+
+        const potential: IVector[] = [];
         for( let x = 0; x < Game.field.width * Game.field.displayWidth; x += Game.field.displayWidth) {
             for( let y = 0; y < Game.field.height * Game.field.displayHeight; y += Game.field.displayHeight) {
 
-                // const target = {x,y}
-                // gameField.reduce((a,b) => a.normals)
+                const target = {x1:hero.x,y1:hero.y, x2:x,y2:y};
+                
+                const normals: IVector[] = [];
+                gameField.forEach(a => 
+                    a.normals(target).forEach(n => 
+                        normals.push(n)));
+
+                const result: IVector = {x1: x, y1: y, x2: x, y2: y};
+                normals.forEach(a => {
+                    const d:number = Math.sqrt((target.x2 - target.x1)* (target.x2 - target.x1) + 
+                        (target.y2 - target.y1) * (target.y2 - target.y1));
+
+                    const dx = ((a.x2 - a.x1) + (target.x2 - target.x1)) / d;
+                    const dy = ((a.y2 - a.y1) + (target.y2 - target.y1)) / d;
+                    
+                    result.x2 += dx;
+                    result.y2 += dy;
+                });
+
+                potential.push(result);
             }
+
+            this.setState({potential});
         }
     }
 
