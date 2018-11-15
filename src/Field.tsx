@@ -1,7 +1,7 @@
 /*
  * Created by: Pavel Borisov (pborisov@naumen.ru>) on 13.11.2018
  * -----
- * Last Modified: 14.11.2018 16:17:55
+ * Last Modified: 15.11.2018 18:37:25
  * Modified By: Pavel Borisov (pborisov@naumen.ru>)
  */
 
@@ -17,11 +17,57 @@ interface IProps {
 }
   
 interface IVector {
+    x: number;
+    y: number;
     x1: number;
     y1: number;
     x2: number;
     y2: number;
+
+    mod(): number;
+    inv(): IVector;
+    orto(): IVector;
+    scalarMulti(v: IVector): number;
 }
+
+class Vector implements IVector {
+    public x: number;
+    public y: number;
+    public x1: number;
+    public y1: number;
+    public x2: number;
+    public y2: number;
+
+    constructor(x1: number, y1: number, x2: number, y2: number) {
+        this.x1 = x1;
+        this.x2 = x2;
+        this.y1 = y1;
+        this.y2 = y2;
+
+        this.x = x2 - x1;
+        this.y = y2 - y1;
+    }
+
+    public mod() {
+        return Math.sqrt(
+            (this.x2 - this.x1)  * (this.x2 - this.x1) +
+            (this.y2 - this.y1) * (this.y2 - this.y1)
+        )
+    }
+
+    public orto(): IVector {
+        return new Vector(this.x1, this.y1, this.x1 + this.y, this.y1 - this.x);
+    }
+
+    public inv(): IVector {
+        return new Vector(this.x2, this.y2, this.x1, this.y1);
+    }
+
+    public scalarMulti(t: IVector): number {
+        return ( this.x * t.x + this.y * t.y );
+    }
+}
+
 // interface IState {}
 
 interface IFigure {
@@ -61,31 +107,25 @@ class RectDrawer implements IRect {
         );
     }
 
-    public orto(t: number[]): IVector {
-        return {
-            x1: t[0], 
-            y1: t[1],
-            x2: t[0] - t[2], 
-            y2: t[1] - t[3]
-        }
+    public check(t: Vector, v: Vector[]): Vector[] {
+        const d = t.mod();
+
+        return v.map(item => item.orto())
+         .filter(o => o.scalarMulti(t) < 0 )
+         .map(o => new Vector(o.x1, o.y1, o.x1 + (o.x * (50 / d)), o.y1 + ( o.y * (50 / d))));
     }
 
-    public check(t: IVector, v: number[][]): IVector[] {
-        return v.map((vi: number[]) => this.orto(vi))
-         .filter((o: IVector) => (( o.x2 - o.x1 ) * (t.x2 - t.x1) + 
-            ( o.y2 - o.y1 ) * (t.y2 - t.y1)) > 0
-         );
-    }
-
-    public normals(target: IVector): IVector[] {
+    public normals(t: Vector): Vector[] {
         const {x,y,w,h} = this;
 
-        return this.check(target, 
-            [[x,y,x+w,y],
-            [x+w,y,x+w,y+h],
-            [x+w,y+h,x,y+h],
-            [x,y+h,x,y]]
-        );
+        const target = new Vector(t.x2, t.y2,x + w / 2,y + h / 2);
+
+        return target.mod() < (w + h + 80) ? this.check(target, 
+            [ new Vector(x,y,x+10,y),
+            new Vector(x+w,y,x+w,y+10),
+            new Vector(x+w,y+h,x+w-10,y+h),
+            new Vector(x,y+h,x,y+h-10) ]
+        ) : [];
     }
 }
 
@@ -118,17 +158,15 @@ class CircleDrawer implements ICircle {
         );
     }
 
-    public normals(target: IVector): IVector[] {
+    public normals(t: Vector): Vector[] {
         const {x,y,r} = this;
-        const dist = Math.sqrt(
-            (target.x2 - target.x1)  * (target.x2 - target.x1) +
-            (target.y2 - target.y1) * (target.y2 - target.y1)
-        );
+        const target = new Vector(t.x2, t.y2,x,y);
+        const dist = target.mod();
         
-        return [ {
-            x1: x + (r / dist * (target.x2 - target.x1)), y1: y + (r / dist * (target.y2 - target.y1)), 
-            x2: x + ((r + 1) / dist * (target.x2 - target.x1)), y2: y + ((r + 1) / dist * (target.y2 - target.y1)) 
-        } ];
+        return dist > r && dist - r < 100 ? [ new Vector(
+            x - (r * target.x / dist), y - (r * target.y / dist), 
+            x - ((r + (200 / (dist - r))) * target.x / dist), y - ((r + (200 / (dist - r))) * target.y / dist)
+         ) ] : [];
     }
 }
 
@@ -164,7 +202,7 @@ class HeroDrawer implements IPoint {
     }
 }
 
-class Field extends React.Component<IProps, {board: number[][], field: IFigure[], hero: IFigure, potential: IVector[]}> {    
+class Field extends React.Component<IProps, {board: number[][], field: IFigure[], hero: IFigure, potential: IVector[], test: IVector[]}> {    
     public state = {
         board: [
             [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -199,7 +237,8 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
 
         hero: new HeroDrawer({x:150, y: 120} as IPoint),
 
-        potential: []
+        potential: [],
+        test: []
     }
 
     private timerId?:number = undefined;
@@ -224,16 +263,16 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
         const {w,h} = this.props;
         const field = this.renderField(w,h);
 
-        const grid = [];
-        const gridStepX = Game.field.displayWidth;
-        for(let i = 0; i <= Game.field.width; i++) {
-            grid.push(<Line key={i + "x"} points={[i * gridStepX,0, i * gridStepX, Game.field.height * Game.field.displayHeight]} stroke={'gray'} strokeWidth={1}/>)
-        }
+        const grid: JSX.Element[] = [];
+        // const gridStepX = Game.field.displayWidth;
+        // for(let i = 0; i <= Game.field.width; i++) {
+        //     grid.push(<Line key={i + "x"} points={[i * gridStepX,0, i * gridStepX, Game.field.height * Game.field.displayHeight]} stroke={'gray'} strokeWidth={1}/>)
+        // }
 
-        const gridStepY = Game.field.displayHeight;
-        for(let i = 0; i <= Game.field.height; i++) {
-            grid.push(<Line key={i + "y"} points={[0, i * gridStepY, Game.field.width * Game.field.displayWidth, i * gridStepY]} stroke={'gray'} strokeWidth={1}/>)
-        }                        
+        // const gridStepY = Game.field.displayHeight;
+        // for(let i = 0; i <= Game.field.height; i++) {
+        //     grid.push(<Line key={i + "y"} points={[0, i * gridStepY, Game.field.width * Game.field.displayWidth, i * gridStepY]} stroke={'gray'} strokeWidth={1}/>)
+        // }
         
         const potentials = this.state.potential.map((v:IVector) =>
             <Line
@@ -242,6 +281,14 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
                 stroke={'green'}
             />
         )
+
+        const tests = this.state.test.map((v:IVector) =>
+        <Line
+            key={Math.random()}
+            points={[v.x1, v.y1, v.x2, v.y2]}
+            stroke={'black'}
+        />
+    )
 
         return (
         <div className="App" onClick={this.calculatePotential}>
@@ -254,6 +301,7 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
                 { this.state.hero.render() }
                 { field }
                 { potentials }
+                { tests }
             </Layer>
             </Stage>
         </div>    
@@ -305,6 +353,10 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
             this.setState({hero});
         }
 
+        // if(this.tick % 3 === 0) {
+        //     this.calculatePotential();
+        // }
+
         this.tick++;
         this.timerId = window.setTimeout(this.onTick.bind(this), 100);
     }
@@ -338,32 +390,61 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
         const hero: HeroDrawer = this.state.hero;
 
         const potential: IVector[] = [];
+        const test: IVector[] = [];
+
+        // const testt = new Vector(hero.x,hero.y, 150, 150);
+        // test.push(testt);
+        // gameField.forEach(a => 
+        //     a.normals(testt)
+        //         .map(n => n.inv())
+        //         .forEach(n => {
+        //             test.push(n);
+        //         }));
+
         for( let x = 0; x < Game.field.width * Game.field.displayWidth; x += Game.field.displayWidth) {
             for( let y = 0; y < Game.field.height * Game.field.displayHeight; y += Game.field.displayHeight) {
 
-                const target = {x1:hero.x,y1:hero.y, x2:x,y2:y};
+                if( gameField.find(figure => {
+                    if(figure instanceof RectDrawer ) {
+                        return (figure.x < x && figure.y < y && 
+                            figure.x + figure.w > x && figure.y + figure.h > y);
+                    }
+        
+                    if(figure instanceof CircleDrawer ) {
+                        return ((x - figure.x) * (x - figure.x) + (y - figure.y) * (y - figure.y) < figure.r * figure.r);
+                    }
+
+                    return false;    
+                })) {
+                    continue;
+                }
+
+                const target = new Vector(hero.x,hero.y, x,y);
+                // const d:number = target.mod();
                 
-                const normals: IVector[] = [];
+                const normals: Vector[] = [];
                 gameField.forEach(a => 
-                    a.normals(target).forEach(n => 
-                        normals.push(n)));
+                    a.normals(target)
+                        .map(n => n.inv())
+                        .forEach(n => {
+                            normals.push(n);
+                        }));
 
-                const result: IVector = {x1: x, y1: y, x2: x, y2: y};
+                let result: Vector = new Vector( x, y, x, y );
                 normals.forEach(a => {
-                    const d:number = Math.sqrt((target.x2 - target.x1)* (target.x2 - target.x1) + 
-                        (target.y2 - target.y1) * (target.y2 - target.y1));
-
-                    const dx = ((a.x2 - a.x1) + (target.x2 - target.x1)) / d;
-                    const dy = ((a.y2 - a.y1) + (target.y2 - target.y1)) / d;
                     
-                    result.x2 += dx;
-                    result.y2 += dy;
+                    // const dx = (a.x + (target.x)) / d;
+                    // const dy = (a.y + (target.y)) / d;
+                    const dx = a.x; /// (d*d);
+                    const dy = a.y; /// (d*d);
+
+                    result = new Vector( result.x1, result.y1, result.x2 - dx, result.y2 - dy);
                 });
 
                 potential.push(result);
             }
 
-            this.setState({potential});
+            this.setState({potential, test});
         }
     }
 
