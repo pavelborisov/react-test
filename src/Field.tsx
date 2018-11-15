@@ -7,9 +7,10 @@
 
 import * as Konva from 'konva';
 import * as React from 'react';
-import {Layer, Rect, Stage, Text, Circle, Line} from 'react-konva';
+import {Layer, Rect, Stage, Text, Circle, Line, Shape} from 'react-konva';
 import { Game } from './Game';
 // import { Game } from './Game';
+import autobind from 'autobind-decorator';
 
 interface IProps {
     h: number;
@@ -258,29 +259,28 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
     public componentWillUnmount() {
         window.clearTimeout(this.timerId);
     }
-
+    
     public render() {
         const {w,h} = this.props;
         const field = this.renderField(w,h);
 
         const grid: JSX.Element[] = [];
-        // const gridStepX = Game.field.displayWidth;
-        // for(let i = 0; i <= Game.field.width; i++) {
-        //     grid.push(<Line key={i + "x"} points={[i * gridStepX,0, i * gridStepX, Game.field.height * Game.field.displayHeight]} stroke={'gray'} strokeWidth={1}/>)
-        // }
+        const gridStepX = Game.field.cellWidth;
+        for(let i = 0; i <= Game.field.width; i++) {
+            grid.push(<Line key={i + "x"} points={[i * gridStepX,0, i * gridStepX, Game.field.displayHeight]} stroke={'gray'} strokeWidth={1}/>)
+        }
 
-        // const gridStepY = Game.field.displayHeight;
-        // for(let i = 0; i <= Game.field.height; i++) {
-        //     grid.push(<Line key={i + "y"} points={[0, i * gridStepY, Game.field.width * Game.field.displayWidth, i * gridStepY]} stroke={'gray'} strokeWidth={1}/>)
-        // }
+        const gridStepY = Game.field.cellHeight;
+        for(let i = 0; i <= Game.field.height; i++) {
+            grid.push(<Line key={i + "y"} points={[0, i * gridStepY, Game.field.displayWidth, i * gridStepY]} stroke={'gray'} strokeWidth={1}/>)
+        }
         
-        const potentials = this.state.potential.map((v:IVector) =>
-            <Line
-                key={Math.random()}
-                points={[v.x1, v.y1, v.x2, v.y2]}
+        const potentials = (
+            <Shape
+                sceneFunc={this.drawPotential}
                 stroke={'green'}
             />
-        )
+        );
 
         const tests = this.state.test.map((v:IVector) =>
         <Line
@@ -292,22 +292,39 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
 
         return (
         <div className="App" onClick={this.calculatePotential}>
-            <Stage x={20} width={window.innerWidth} height={window.innerHeight}>
+            <Stage x={20} width={Game.field.displayWidth} height={Game.field.displayHeight}>
             <Layer>
                 <Text key={Konva.Util.getRandomColor()} text={ this.tick.toString() }/>
             </Layer>
             <Layer y={20}>
+
                 { grid }
-                { this.state.hero.render() }
                 { field }
                 { potentials }
                 { tests }
+            </Layer>
+            <Layer y={20}>
+                { this.state.hero.render() }
             </Layer>
             </Stage>
         </div>    
         );
     }
-    
+ 
+    @autobind
+    public drawPotential(context: Konva.Context, shape: Konva.Shape) {
+        context.beginPath();
+
+        this.state.potential.forEach((v:IVector) => {
+            context.moveTo(v.x1, v.y1);
+            context.lineTo(v.x2, v.y2);
+        })
+
+        context.closePath();
+
+        context.fillStrokeShape(shape);
+    }
+
     public onTick() {
         // const {w,h} = this.props;
         // const gameField: IFigure[] = this.state.field;
@@ -401,8 +418,8 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
         //             test.push(n);
         //         }));
 
-        for( let x = 0; x < Game.field.width * Game.field.displayWidth; x += Game.field.displayWidth) {
-            for( let y = 0; y < Game.field.height * Game.field.displayHeight; y += Game.field.displayHeight) {
+        for( let x = 0; x < Game.field.displayWidth; x += Game.field.cellWidth) {
+            for( let y = 0; y < Game.field.displayHeight; y += Game.field.cellHeight) {
 
                 if( gameField.find(figure => {
                     if(figure instanceof RectDrawer ) {

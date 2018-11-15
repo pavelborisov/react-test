@@ -10,6 +10,9 @@ export namespace Game {
         width: number,
         height: number,
 
+        cellWidth: number,
+        cellHeight: number,
+
         displayWidth: number,
         displayHeight: number
     }
@@ -18,7 +21,10 @@ export namespace Game {
         width: 90,
         height: 45,
 
-        displayWidth: 10,
-        displayHeight: 10
+        cellWidth: 10,
+        cellHeight: 10,
+
+        displayWidth: 900,
+        displayHeight: 450
     }
 }
