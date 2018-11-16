@@ -1,13 +1,13 @@
 /*
  * Created by: Pavel Borisov (pborisov@naumen.ru>) on 13.11.2018
  * -----
- * Last Modified: 15.11.2018 18:37:25
+ * Last Modified: 16.11.2018 12:50:07
  * Modified By: Pavel Borisov (pborisov@naumen.ru>)
  */
 
 import * as Konva from 'konva';
 import * as React from 'react';
-import {Layer, Rect, Stage, Text, Circle, Line, Shape} from 'react-konva';
+import {Layer, Stage, Text, Line, Shape} from 'react-konva';
 import { Game } from './Game';
 // import { Game } from './Game';
 import autobind from 'autobind-decorator';
@@ -72,7 +72,7 @@ class Vector implements IVector {
 // interface IState {}
 
 interface IFigure {
-    render(): JSX.Element;
+    render(context: Konva.Context, shape: Konva.Shape): void;
     normals(target: IVector): IVector[];
 }
 
@@ -93,19 +93,17 @@ class RectDrawer implements IRect {
         Object.assign( this, rect );
     }
 
-    public render(): JSX.Element {
+    @autobind
+    public render(context: Konva.Context, shape: Konva.Shape): void {
         const {x,y,w,h} = this;
+        
+        context.beginPath();
 
-        return (
-            <Rect
-                x={x}
-                y={y}
-                width={w}
-                height={h}
-                fill={'red'}
-                shadowBlur={5}
-            />
-        );
+        context.rect(x,y,w,h);
+
+        context.closePath();
+
+        context.fillStrokeShape(shape);
     }
 
     public check(t: Vector, v: Vector[]): Vector[] {
@@ -145,18 +143,17 @@ class CircleDrawer implements ICircle {
         Object.assign( this, circle );
     }
 
-    public render(): JSX.Element {
+    @autobind
+    public render(context: Konva.Context, shape: Konva.Shape): void {
         const {x,y,r} = this;
 
-        return (
-            <Circle
-                x={x}
-                y={y}
-                radius={r}
-                fill={'red'}
-                shadowBlur={5}
-            />
-        );
+        context.beginPath();
+
+        context.arc(x,y,r,0,Math.PI*2,true);
+
+        context.closePath();
+
+        context.fillStrokeShape(shape);
     }
 
     public normals(t: Vector): Vector[] {
@@ -178,24 +175,28 @@ interface IPoint extends IFigure {
 
 class HeroDrawer implements IPoint {
     public x: number;
-    public y: number;    
+    public y: number;
+    public v: IVector = new Vector(0,0,20,0);
 
     constructor(point: IPoint) {
         Object.assign( this, point );
     }
 
-    public render(): JSX.Element {
-        const {x,y} = this;
+    @autobind
+    public render(context: Konva.Context, shape: Konva.Shape): void {
+        const {x,y,v} = this;
 
-        return (            
-            <Circle
-                x={x}
-                y={y}
-                radius={11}
-                fill={'blue'}
-                shadowBlur={5}
-            />
-        );
+        context.beginPath();
+
+        context.arc(x,y,11,0, 2*Math.PI, true);
+
+        context.moveTo(x,y);
+        context.lineTo(x + v.x, y + v.y);
+
+        context.closePath();
+        
+        context.fillShape(shape);
+        context.strokeShape(shape);
     }
 
     public normals(target: IVector): IVector[] {
@@ -262,33 +263,41 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
     
     public render() {
         const {w,h} = this.props;
-        const field = this.renderField(w,h);
-
-        const grid: JSX.Element[] = [];
-        const gridStepX = Game.field.cellWidth;
-        for(let i = 0; i <= Game.field.width; i++) {
-            grid.push(<Line key={i + "x"} points={[i * gridStepX,0, i * gridStepX, Game.field.displayHeight]} stroke={'gray'} strokeWidth={1}/>)
-        }
-
-        const gridStepY = Game.field.cellHeight;
-        for(let i = 0; i <= Game.field.height; i++) {
-            grid.push(<Line key={i + "y"} points={[0, i * gridStepY, Game.field.displayWidth, i * gridStepY]} stroke={'gray'} strokeWidth={1}/>)
-        }
+        const field = (
+            <Shape
+                sceneFunc={this.renderField.bind(this,w,h)}
+                strokeWidth={1}
+                stroke={'red'}
+                fill={'orange'}
+            />
+        );
+        
+        const grid = (
+            <Shape
+                sceneFunc={this.drawGrid}
+                strokeWidth={1}
+                stroke={'gray'}
+                opacity={0.2}
+            />
+        );
         
         const potentials = (
-            <Shape
+            <Shape            
                 sceneFunc={this.drawPotential}
+                strokeWidth={1}
                 stroke={'green'}
+                opacity={0.7}
             />
         );
 
         const tests = this.state.test.map((v:IVector) =>
-        <Line
-            key={Math.random()}
-            points={[v.x1, v.y1, v.x2, v.y2]}
-            stroke={'black'}
-        />
-    )
+            <Line
+                key={Math.random()}
+                strokeWidth={1}
+                points={[v.x1, v.y1, v.x2, v.y2]}
+                stroke={'black'}
+            />
+        )
 
         return (
         <div className="App" onClick={this.calculatePotential}>
@@ -304,7 +313,13 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
                 { tests }
             </Layer>
             <Layer y={20}>
-                { this.state.hero.render() }
+                <Shape
+                    key={this.state.hero.x + '_' + this.state.hero.y}
+                    sceneFunc={this.state.hero.render}
+                    strokeWidth={1}
+                    stroke={'green'}
+                    fill={'lightgreen'}
+                />
             </Layer>
             </Stage>
         </div>    
@@ -312,13 +327,34 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
     }
  
     @autobind
-    public drawPotential(context: Konva.Context, shape: Konva.Shape) {
+    public drawPotential(context: Konva.Context, shape: Konva.Shape) {        
         context.beginPath();
 
         this.state.potential.forEach((v:IVector) => {
             context.moveTo(v.x1, v.y1);
             context.lineTo(v.x2, v.y2);
         })
+
+        context.closePath();
+
+        context.fillStrokeShape(shape);
+    }
+
+    @autobind
+    public drawGrid(context: Konva.Context, shape: Konva.Shape) {
+        context.beginPath();
+
+        const gridStepX = Game.field.cellWidth;
+        for(let i = 0; i <= Game.field.width; i++) {
+            context.moveTo(i * gridStepX,0);
+            context.lineTo(i * gridStepX, Game.field.displayHeight);
+        }
+
+        const gridStepY = Game.field.cellHeight;
+        for(let i = 0; i <= Game.field.height; i++) {
+            context.moveTo(0, i * gridStepY);
+            context.lineTo(Game.field.displayWidth, i * gridStepY);
+        }
 
         context.closePath();
 
@@ -396,10 +432,13 @@ class Field extends React.Component<IProps, {board: number[][], field: IFigure[]
         this.timerId = window.setTimeout(this.onTick.bind(this), 0);
     }
 
-    private renderField(w: number, h: number): JSX.Element[] {
+    @autobind
+    private renderField(w: number, h: number, context: Konva.Context, shape: Konva.Shape) {
         const gameField: IFigure[] = this.state.field;
 
-        return gameField.map( item => item.render() );
+        gameField.forEach( item => item.render(context, shape) );
+
+        context.fillStrokeShape(shape);
     }
 
     private calculatePotential() {
